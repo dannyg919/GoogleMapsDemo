@@ -4,13 +4,16 @@ import android.Manifest;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.DialogInterface;
+import android.graphics.Bitmap;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.animation.BounceInterpolator;
 import android.widget.EditText;
 import android.widget.Toast;
 
@@ -39,6 +42,7 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.maps.android.ui.IconGenerator;
 
 import permissions.dispatcher.NeedsPermission;
 import permissions.dispatcher.RuntimePermissions;
@@ -83,7 +87,13 @@ public class MapDemoActivity extends AppCompatActivity implements GoogleMap.OnMa
             mapFragment.getMapAsync(new OnMapReadyCallback() {
                 @Override
                 public void onMapReady(GoogleMap map) {
+                    // Once map is loaded
+                    // Supported types include: MAP_TYPE_NORMAL, MAP_TYPE_SATELLITE
+                    // MAP_TYPE_TERRAIN, MAP_TYPE_HYBRID
+                    map.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
+
                     loadMap(map);
+                    map.setInfoWindowAdapter(new CustomWindowAdapter(getLayoutInflater()));
                 }
             });
         } else {
@@ -169,11 +179,23 @@ public class MapDemoActivity extends AppCompatActivity implements GoogleMap.OnMa
                         String snippet = ((EditText) alertDialog.findViewById(R.id.etSnippet)).
                                 getText().toString();
                         // Creates and adds marker to the map
+                        IconGenerator iconGenerator = new IconGenerator(MapDemoActivity.this);
+
+                        // Possible color options:
+                        // STYLE_WHITE, STYLE_RED, STYLE_BLUE, STYLE_GREEN, STYLE_PURPLE, STYLE_ORANGE
+                        iconGenerator.setStyle(IconGenerator.STYLE_GREEN);
+                        // Swap text here to live inside speech bubble
+                        Bitmap bitmap = iconGenerator.makeIcon(title);
+                        // Use BitmapDescriptorFactory to create the marker
+                        BitmapDescriptor icon = BitmapDescriptorFactory.fromBitmap(bitmap);
                         Marker marker = map.addMarker(new MarkerOptions()
                                 .position(point)
                                 .title(title)
                                 .snippet(snippet)
-                                .icon(defaultMarker));
+                                .icon(icon));
+
+                        dropPinEffect(marker);
+
                     }
                 });
 
@@ -185,6 +207,38 @@ public class MapDemoActivity extends AppCompatActivity implements GoogleMap.OnMa
 
         // Display the dialog
         alertDialog.show();
+    }
+
+    private void dropPinEffect(final Marker marker) {
+        // Handler allows us to repeat a code block after a specified delay
+        final android.os.Handler handler = new android.os.Handler();
+        final long start = SystemClock.uptimeMillis();
+        final long duration = 1500;
+
+        // Use the bounce interpolator
+        final android.view.animation.Interpolator interpolator =
+                new BounceInterpolator();
+
+        // Animate marker with a bounce updating its position every 15ms
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                long elapsed = SystemClock.uptimeMillis() - start;
+                // Calculate t for bounce based on elapsed time
+                float t = Math.max(
+                        1 - interpolator.getInterpolation((float) elapsed
+                                / duration), 0);
+                // Set the anchor
+                marker.setAnchor(0.5f, 1.0f + 14 * t);
+
+                if (t > 0.0) {
+                    // Post this event again 15ms from now.
+                    handler.postDelayed(this, 15);
+                } else { // done elapsing, show window
+                    marker.showInfoWindow();
+                }
+            }
+        });
     }
 
     /*
